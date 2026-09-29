@@ -1,0 +1,32 @@
+﻿{
+    "5_aciertos":  [
+                       {
+                           "agencia":  "1",
+                           "jugada":  "3"
+                       }
+                   ],
+    "4_aciertos":  [
+                       {
+                           "agencia":  "2",
+                           "jugada":  "3"
+                       },
+                       {
+                           "agencia":  "3",
+                           "jugada":  "3"
+                       }
+                   ],
+    "3_aciertos":  [
+                       {
+                           "agencia":  "1",
+                           "jugada":  "33"
+                       },
+                       {
+                           "agencia":  "2",
+                           "jugada":  "1"
+                       },
+                       {
+                           "agencia":  "2",
+                           "jugada":  "34"
+                       }
+                   ]
+}

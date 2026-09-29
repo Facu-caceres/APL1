@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Valida jugadas de agencias de lotería contra el archivo de números ganadores.
+    Valida jugadas de agencias de loteria contra el archivo de numeros ganadores.
 .DESCRIPTION
-    Script del Trabajo Práctico de Laboratorio N° 1 - Virtualización de Hardware (UNLaM).
+    Script del Trabajo Practico de Laboratorio N° 1 - Virtualización de Hardware (UNLaM).
     Analiza las jugadas semanales contenidas en archivos CSV por agencia e identifica
     las apuestas con 5, 4 y 3 aciertos, generando un reporte en formato JSON.
 .PARAMETER directorio
@@ -11,16 +11,18 @@
 .PARAMETER pantalla
     Indica que el resultado JSON debe mostrarse por consola. Mutuamente excluyente con -archivo.
 .PARAMETER archivo
-    Ruta completa del archivo donde se guardará el resultado JSON. Mutuamente excluyente con -pantalla.
+    Ruta completa del archivo donde se guardara el resultado JSON. Mutuamente excluyente con -pantalla.
 .EXAMPLE
     Get-Help ./ejercicio1.ps1
 .EXAMPLE
     ./ejercicio1.ps1 -directorio "./lote_pruebas" -pantalla
 .EXAMPLE
-    ./ejercicio1.ps1 -directorio "C:\Datos Lotería" -archivo "./salida.json"
+    ./ejercicio1.ps1 -directorio "C:\Datos Loteria" -archivo "./salida.json"
 #>
-# UNLaM - Virtualización de Hardware (3654) - 2026-Q2
-# APL 1 - Ejercicio 1: Validación de Jugadas de Lotería
+
+
+# UNLaM - Virtualizacion de Hardware (3654) - 2026-Q2
+# APL 1 - Ejercicio 1: Validacion de Jugadas de Loteria
 # Integrantes:
 #   - Facundo Caceres Olguin
 #   - Bianca Uriana Pedrol Ledesma
@@ -51,7 +53,7 @@ try {
 
     $rutaGanadores = Join-Path -Path $directorio -ChildPath "ganadores.csv"
     if (-not (Test-Path -LiteralPath $rutaGanadores -PathType Leaf)) {
-        Write-Error "No se encontró el archivo 'ganadores.csv' dentro de la carpeta '$directorio'."
+        Write-Error "No se encontro el archivo 'ganadores.csv' dentro de la carpeta '$directorio'."
         exit 1
     }
 
@@ -61,10 +63,10 @@ try {
     $rutaTemporal = Join-Path -Path $baseTemp -ChildPath $nombreTemp
     New-Item -ItemType Directory -Path $rutaTemporal -Force | Out-Null
 
-    # Lectura de números ganadores
+    # Lectura de numeros ganadores
     $lineaGanadores = Get-Content -LiteralPath $rutaGanadores | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1
     if (-not $lineaGanadores) {
-        Write-Error "El archivo de números ganadores se encuentra vacío."
+        Write-Error "El archivo de numeros ganadores se encuentra vacio."
         exit 1
     }
 
@@ -83,7 +85,7 @@ try {
         "3_aciertos" = [System.Collections.Generic.List[object]]::new()
     }
 
-    # Búsqueda de archivos CSV de agencias
+    # Busqueda de archivos CSV de agencias
     $archivosAgencias = Get-ChildItem -LiteralPath $directorio -Filter "*.csv" | 
         Where-Object { $_.Name -ne "ganadores.csv" }
 
@@ -127,7 +129,7 @@ try {
         }
     }
 
-    # Conversión a formato JSON válido
+    # Conversion a formato JSON valido
     $jsonSalida = $resultados | ConvertTo-Json -Depth 5
 
     # Publicación de resultado
@@ -140,11 +142,11 @@ try {
         }
         
         [System.IO.File]::WriteAllText($archivo, $jsonSalida, [System.Text.Encoding]::UTF8)
-        Write-Host "Procesamiento finalizado con éxito. Resultado guardado en: $archivo"
+        Write-Host "Procesamiento finalizado con exito. Resultado guardado en: $archivo"
     }
 
 } catch {
-    Write-Error "Ocurrió un error inesperado durante el procesamiento: $($_.Exception.Message)"
+    Write-Error "Ocurrio un error inesperado durante el procesamiento: $($_.Exception.Message)"
     exit 1
 } finally {
     # Limpieza de archivos temporales
