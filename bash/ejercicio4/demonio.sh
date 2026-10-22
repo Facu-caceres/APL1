@@ -3,8 +3,8 @@
 # UNLaM - Virtualizacion de Hardware (3654) - 2026-Q2
 # APL 1 - Ejercicio 4: Demonio de Monitoreo y Backup de Duplicados
 # Integrantes:
-#   - Facundo Caceres Olguin
-#   - Bianca Uriana Pedrol Ledesma
+#   - Caceres Olguin, Facundo
+#   - Pedrol Ledesma, Bianca Uriana
 
 DIRECTORIO=""
 SALIDA=""
@@ -18,7 +18,7 @@ Uso: $(basename "$0") -d <directorio> -s <salida>
      $(basename "$0") -d <directorio> -k
 
 Descripcion:
-  Demonio que monitorea un directorio de forma recursiva. Al detectar
+  Demonio que monitorea un directorio recursivamente. Al detectar
   la creacion de un archivo duplicado (mismo nombre y tamano), genera
   un registro de log y crea un archivo comprimido .tar.gz con los archivos.
 
@@ -34,7 +34,7 @@ Ejemplos:
 EOF
 }
 
-# Parseo de parametros
+# Parseo de parametros en cualquier orden
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help)
@@ -78,28 +78,57 @@ done
 # Modo proceso en segundo plano (Worker)
 if [[ "$WORKER_MODE" == true ]]; then
     echo "$$" > "$PID_FILE_PARAM"
-    trap 'rm -f "$PID_FILE_PARAM"; exit 0' EXIT INT TERM
-
     mkdir -p "$SALIDA" 2>/dev/null
     LOG_FILE="$SALIDA/demonio.log"
 
-    while IFS= read -r ARCHIVO_NUEVO; do
+    INOTIFY_PID=""
+    FIFO_PIPE="/tmp/inotify_fifo_$$"
+
+    limpiar_worker() {
+        if [[ -n "$INOTIFY_PID" ]] && kill -0 "$INOTIFY_PID" 2>/dev/null; then
+            kill "$INOTIFY_PID" 2>/dev/null
+        fi
+        rm -f "$FIFO_PIPE" "$PID_FILE_PARAM" 2>/dev/null
+        exit 0
+    }
+    trap limpiar_worker EXIT INT TERM
+
+    rm -f "$FIFO_PIPE"
+    mkfifo "$FIFO_PIPE"
+
+    if command -v stdbuf >/dev/null 2>&1; then
+        stdbuf -oL -eL inotifywait -m -r -e create,close_write,moved_to --format '%e;%w%f' "$DIRECTORIO" 2>/dev/null > "$FIFO_PIPE" &
+    else
+        inotifywait -m -r -e create,close_write,moved_to --format '%e;%w%f' "$DIRECTORIO" 2>/dev/null > "$FIFO_PIPE" &
+    fi
+    INOTIFY_PID=$!
+
+    while IFS=';' read -r EVENTO ARCHIVO_NUEVO; do
         [[ ! -f "$ARCHIVO_NUEVO" ]] && continue
 
-        # Evitar bucles omitiendo eventos dentro de la carpeta de salida
+        # Evitar procesar eventos dentro de la carpeta de salida
         if [[ "$ARCHIVO_NUEVO" == "$SALIDA"* ]]; then
             continue
         fi
 
-        NOMBRE_ARCHIVO=$(basename "$ARCHIVO_NUEVO")
-        TAMANO_ARCHIVO=$(wc -c < "$ARCHIVO_NUEVO" 2>/dev/null | tr -d ' ')
+        # Si el evento es solo CREATE de archivo, esperar al CLOSE_WRITE para leer tamano real
+        if [[ "$EVENTO" == *"CREATE"* && "$EVENTO" != *"ISDIR"* && "$EVENTO" != *"CLOSE_WRITE"* ]]; then
+            continue
+        fi
 
-        # Busqueda de archivos duplicados por nombre y tamano
+        sleep 0.3
+        [[ ! -f "$ARCHIVO_NUEVO" ]] && continue
+
+        NOMBRE_ARCHIVO=$(basename "$ARCHIVO_NUEVO")
+        TAMANO_ARCHIVO=$(wc -c < "$ARCHIVO_NUEVO" 2>/dev/null | tr -d '[:space:]')
+        [[ -z "$TAMANO_ARCHIVO" ]] && continue
+
+        # Buscar duplicados por nombre y tamano
         DUPLICADOS=()
         while IFS= read -r -d '' CANDIDATO; do
             if [[ "$CANDIDATO" != "$ARCHIVO_NUEVO" && "$CANDIDATO" != "$SALIDA"* ]]; then
-                CAND_TAM=$(wc -c < "$CANDIDATO" 2>/dev/null | tr -d ' ')
-                if [[ "$CAND_TAM" == "$TAMANO_ARCHIVO" ]]; then
+                CAND_TAM=$(wc -c < "$CANDIDATO" 2>/dev/null | tr -d '[:space:]')
+                if [[ -n "$CAND_TAM" && "$CAND_TAM" -eq "$TAMANO_ARCHIVO" ]]; then
                     DUPLICADOS+=("$CANDIDATO")
                 fi
             fi
@@ -122,7 +151,7 @@ if [[ "$WORKER_MODE" == true ]]; then
                 echo "--------------------------------------------------"
             } >> "$LOG_FILE"
 
-            # Empaquetado preservando estructura relativa
+            # Preservar estructura relativa en el archivo comprimido
             RELATIVOS=()
             for elem in "$ARCHIVO_NUEVO" "${DUPLICADOS[@]}"; do
                 rel="${elem#$DIRECTORIO/}"
@@ -132,18 +161,18 @@ if [[ "$WORKER_MODE" == true ]]; then
             tar -czf "$BACKUP_TAR" -C "$DIRECTORIO" "${RELATIVOS[@]}" 2>/dev/null
             sleep 1
         fi
-    done < <(inotifywait -m -r -e close_write,moved_to --format '%w%f' "$DIRECTORIO" 2>/dev/null)
+    done < "$FIFO_PIPE"
 
     exit 0
 fi
 
-# Validacion de dependencia inotifywait
+# Validar inotifywait
 if ! command -v inotifywait >/dev/null 2>&1; then
-    echo "Error: La herramienta 'inotifywait' no esta disponible. Debe instalar el paquete inotify-tools." >&2
+    echo "Error: La herramienta 'inotifywait' no esta instalada. Requiere el paquete inotify-tools." >&2
     exit 1
 fi
 
-# Accion de detencion (--kill)
+# Accion de detencion (-k / --kill)
 if [[ "$KILL_FLAG" == true ]]; then
     if [[ -z "$DIRECTORIO" ]]; then
         echo "Error: El parametro -k/--kill solo se puede utilizar junto con -d/--directorio." >&2
@@ -162,6 +191,7 @@ if [[ "$KILL_FLAG" == true ]]; then
     if [[ -f "$PID_FILE" ]]; then
         PID_GUARDADO=$(cat "$PID_FILE" 2>/dev/null)
         if [[ -n "$PID_GUARDADO" ]] && kill -0 "$PID_GUARDADO" 2>/dev/null; then
+            pkill -P "$PID_GUARDADO" 2>/dev/null
             kill "$PID_GUARDADO" 2>/dev/null
             rm -f "$PID_FILE" 2>/dev/null
             echo "Demonio con PID $PID_GUARDADO detenido exitosamente para el directorio '$DIR_CANONICO'."
@@ -174,14 +204,14 @@ if [[ "$KILL_FLAG" == true ]]; then
     exit 1
 fi
 
-# Validaciones para inicio del demonio
+# Validaciones de parametros obligatorios
 if [[ -z "$DIRECTORIO" ]]; then
-    echo "Error: Debe indicar el directorio a monitorear con -d o --directorio." >&2
+    echo "Error: Falta el parametro obligatorio -d / --directorio." >&2
     exit 1
 fi
 
 if [[ -z "$SALIDA" ]]; then
-    echo "Error: Debe indicar el directorio de salida para los backups con -s o --salida." >&2
+    echo "Error: Falta el parametro obligatorio -s / --salida." >&2
     exit 1
 fi
 
@@ -197,20 +227,20 @@ SALIDA_CANONICA=$(cd "$SALIDA" 2>/dev/null && pwd)
 DIR_HASH=$(echo -n "$DIR_CANONICO" | md5sum 2>/dev/null | awk '{print $1}')
 PID_FILE="/tmp/demonio_${DIR_HASH}.pid"
 
-# Validacion de instancia unica por directorio
 if [[ -f "$PID_FILE" ]]; then
     PID_GUARDADO=$(cat "$PID_FILE" 2>/dev/null)
     if [[ -n "$PID_GUARDADO" ]] && kill -0 "$PID_GUARDADO" 2>/dev/null; then
-        echo "Error: Ya existe un proceso demonio en ejecucion para el directorio '$DIR_CANONICO' (PID: $PID_GUARDADO)." >&2
+        echo "Error: Ya existe un demonio en ejecucion para el directorio '$DIR_CANONICO' (PID: $PID_GUARDADO)." >&2
         exit 1
     fi
     rm -f "$PID_FILE" 2>/dev/null
 fi
 
-# Inicio automatico en segundo plano
-nohup "$0" --worker "$DIR_CANONICO" "$SALIDA_CANONICA" "$PID_FILE" >/dev/null 2>&1 &
+# Lanzar en segundo plano
+SCRIPT_REAL_PATH=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")
+nohup "$BASH" "$SCRIPT_REAL_PATH" --worker "$DIR_CANONICO" "$SALIDA_CANONICA" "$PID_FILE" >/dev/null 2>&1 &
 WORKER_PID=$!
-sleep 0.3
+sleep 0.4
 
 echo "Demonio iniciado en segundo plano exitosamente."
 echo "PID: $WORKER_PID"

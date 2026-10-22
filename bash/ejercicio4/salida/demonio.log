@@ -1,0 +1,7 @@
+[2026-10-21 21:25:46] Archivo duplicado detectado
+  Archivo nuevo: /home/faccu/Desktop/APL1/bash/ejercicio4/monitor/subcarpeta/documento.txt
+  Tamano: 34 bytes
+  Archivos duplicados encontrados:
+    - /home/faccu/Desktop/APL1/bash/ejercicio4/monitor/documento.txt
+  Backup generado: /home/faccu/Desktop/APL1/bash/ejercicio4/salida/20261021-212546.tar.gz
+--------------------------------------------------
